@@ -1,9 +1,5 @@
-@"
 data/*
 !data/.gitkeep
 __pycache__/
-.ipynb_checkpoints/
-.venv/
 *.pyc
 .DS_Store
-"@ | Set-Content -Encoding ascii .gitignore

@@ -1,7 +1,17 @@
-data/*
-!data/.gitkeep
-__pycache__/
-.ipynb_checkpoints/
+
+# Python environment
 .venv/
+__pycache__/
 *.pyc
-.DS_Store
+
+# Dataset files
+Base.csv
+data/
+*.csv
+
+# Generated data and trained models
+processed/
+models/
+
+# Keep visualization graphs
+# graphs/ is intentionally not ignored

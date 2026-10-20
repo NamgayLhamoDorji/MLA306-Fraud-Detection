@@ -1,5 +1,24 @@
-data/*
-!data/.gitkeep
+# Python environment
+.venv/
 __pycache__/
 *.pyc
-.DS_Store
+
+# Dataset files
+Base.csv
+data/
+
+# Generated processed data and trained models
+processed/
+models/
+
+# Training logs
+logs/
+
+# Ignore CSV files by default
+*.csv
+
+# Keep experiment result CSVs
+!results/*.csv
+
+# Keep visualization graphs
+# graphs/ is intentionally not ignored

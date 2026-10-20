@@ -1,0 +1,28 @@
+{
+    "validation_month": 6,
+    "threshold": 0.5,
+    "pr_auc": 0.1658616610649377,
+    "roc_auc": 0.8866725259158684,
+    "precision": 0.04583364085910399,
+    "recall": 0.856551724137931,
+    "f1_score": 0.08701134930643127,
+    "confusion_matrix": [
+        [
+            80862,
+            25856
+        ],
+        [
+            208,
+            1242
+        ]
+    ],
+    "best_parameters": {
+        "units1": 256,
+        "units2": 64,
+        "dropout1": 0.15961470446025172,
+        "dropout2": 0.10110442342472048,
+        "learning_rate": 0.004274869455295219,
+        "batch_size": 512,
+        "optimizer": "Adam"
+    }
+}

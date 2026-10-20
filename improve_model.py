@@ -1,114 +1,108 @@
 
+import os
 import pandas as pd
+import numpy as np
+import tensorflow as tf
 import joblib
 
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
     confusion_matrix,
-    average_precision_score
+    average_precision_score,
+    roc_auc_score
 )
 
-print("=" * 55)
-print("FRAUD DETECTION - THRESHOLD IMPROVEMENT")
-print("=" * 55)
+print("=" * 60)
+print("DNN FRAUD DETECTION - VALIDATION THRESHOLD COMPARISON")
+print("=" * 60)
 
-# 1. Load the original dataset
-print("\n1. Loading dataset...")
+# 1. Load validation data only
+print("\n1. Loading validation data...")
 
-df = pd.read_csv("data/Base.csv", low_memory=False)
+X_val = pd.read_csv("processed/X_val.csv")
+y_val = pd.read_csv("processed/y_val.csv").iloc[:, 0].to_numpy()
 
-X = df.drop(columns=["fraud_bool"])
-y = df["fraud_bool"]
+print("Validation shape:", X_val.shape)
+print("Actual fraud cases:", int(y_val.sum()))
 
-# 2. Use the same train-test split as before
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.20,
-    random_state=42,
-    stratify=y
+# 2. Load the saved DNN and scaler
+print("\n2. Loading saved DNN and scaler...")
+
+model = tf.keras.models.load_model("models/dnn_baseline.keras")
+scaler = joblib.load("models/dnn_scaler.pkl")
+
+# 3. Scale validation data using the fitted training scaler
+X_val_scaled = scaler.transform(X_val).astype("float32")
+
+# 4. Get predicted fraud probabilities
+print("\n3. Predicting fraud probabilities...")
+
+probabilities = model.predict(
+    X_val_scaled,
+    batch_size=1024,
+    verbose=1
+).ravel()
+
+print(
+    "Validation Average Precision:",
+    round(average_precision_score(y_val, probabilities), 4)
+)
+print(
+    "Validation ROC-AUC:",
+    round(roc_auc_score(y_val, probabilities), 4)
 )
 
-# 3. Encode categorical features
-categorical_columns = X_train.select_dtypes(
-    include=["object", "str", "category"]
-).columns.tolist()
+# 5. Compare thresholds
+print("\n4. Comparing thresholds...")
 
-X_train = pd.get_dummies(
-    X_train, columns=categorical_columns, dtype=int
-)
-
-X_test = pd.get_dummies(
-    X_test, columns=categorical_columns, dtype=int
-)
-
-X_test = X_test.reindex(
-    columns=X_train.columns, fill_value=0
-)
-
-# 4. Load the trained model
-print("2. Loading trained Random Forest model...")
-
-saved = joblib.load("models/fraud_detection_model.pkl")
-model = saved["model"]
-
-# 5. Get fraud probabilities
-print("3. Predicting fraud probabilities...")
-
-probabilities = model.predict_proba(X_test)[:, 1]
-
-print("\nAverage Precision:",
-      round(average_precision_score(y_test, probabilities), 4))
-
-# 6. Compare different thresholds
-print("\n4. Comparing thresholds")
+thresholds = [
+    0.01, 0.02, 0.03, 0.05, 0.075,
+    0.10, 0.15, 0.20, 0.30, 0.40, 0.50
+]
 
 results = []
 
-for threshold in [0.10, 0.20, 0.30, 0.40, 0.50, 0.60]:
+for threshold in thresholds:
     predictions = (probabilities >= threshold).astype(int)
 
     tn, fp, fn, tp = confusion_matrix(
-        y_test, predictions, labels=[0, 1]
+        y_val, predictions, labels=[0, 1]
     ).ravel()
 
     precision = precision_score(
-        y_test, predictions, zero_division=0
+        y_val, predictions, zero_division=0
     )
-
     recall = recall_score(
-        y_test, predictions, zero_division=0
+        y_val, predictions, zero_division=0
     )
-
     f1 = f1_score(
-        y_test, predictions, zero_division=0
+        y_val, predictions, zero_division=0
     )
 
     results.append({
         "Threshold": threshold,
         "Precision": round(precision, 4),
         "Recall": round(recall, 4),
-        "F1-score": round(f1, 4),
-        "False Alarms": int(fp),
-        "Fraud Detected": int(tp),
-        "Fraud Missed": int(fn)
+        "F1_score": round(f1, 4),
+        "True_Negatives": int(tn),
+        "False_Alarms": int(fp),
+        "Fraud_Missed": int(fn),
+        "Fraud_Detected": int(tp)
     })
 
 results_df = pd.DataFrame(results)
 
-print("\n")
-print(results_df.to_string(index=False))
+print("\n", results_df.to_string(index=False))
 
-# 7. Save the comparison
+# 6. Save results
+os.makedirs("results", exist_ok=True)
+
 results_df.to_csv(
-    "processed/threshold_comparison.csv",
+    "results/dnn_threshold_comparison.csv",
     index=False
 )
 
-print("\nResults saved to:")
-print("processed/threshold_comparison.csv")
-
+print("\nSaved: results/dnn_threshold_comparison.csv")
 print("\nTHRESHOLD COMPARISON COMPLETED!")

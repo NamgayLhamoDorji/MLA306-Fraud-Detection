@@ -1,0 +1,23 @@
+{
+    "model": "dnn_leaky_relu.keras",
+    "test_month": 7,
+    "threshold": 0.5,
+    "pr_auc": 0.19427887280401226,
+    "roc_auc": 0.8827763899145572,
+    "precision": 0.04934102141680395,
+    "recall": 0.8389355742296919,
+    "f1_score": 0.09320056013692236,
+    "confusion_matrix": [
+        [
+            72333,
+            23082
+        ],
+        [
+            230,
+            1198
+        ]
+    ],
+    "test_rows": 96843,
+    "test_fraud_cases": 1428,
+    "test_legitimate_cases": 95415
+}

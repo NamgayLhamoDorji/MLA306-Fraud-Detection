@@ -1,4 +1,5 @@
 # Python environment
+venv/
 .venv/
 __pycache__/
 *.pyc
@@ -21,4 +22,5 @@ logs/
 !results/*.csv
 
 # Keep visualization graphs
-# graphs/ is intentionally not ignored
+# graphs/ is intentionally not ignoredprocessed/
+

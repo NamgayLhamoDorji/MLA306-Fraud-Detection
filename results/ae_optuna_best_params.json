@@ -1,0 +1,11 @@
+{
+    "best_validation_pr_auc": 0.030058997063993995,
+    "best_parameters": {
+        "units1": 64,
+        "units2": 16,
+        "bottleneck": 8,
+        "dropout": 0.004116898859160489,
+        "learning_rate": 0.008706020878304856,
+        "batch_size": 256
+    }
+}

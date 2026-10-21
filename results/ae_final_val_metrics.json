@@ -1,0 +1,41 @@
+{
+    "model": "Autoencoder (trained on non-fraud only)",
+    "validation_month": 6,
+    "features_used": [
+        "device_os_windows",
+        "credit_risk_score",
+        "customer_age",
+        "proposed_credit_limit",
+        "current_address_months_count",
+        "income",
+        "date_of_birth_distinct_emails_4w",
+        "keep_alive_session"
+    ],
+    "pr_auc": 0.030058997063993995,
+    "roc_auc": 0.7005063102175182,
+    "threshold": 0.009923799894750118,
+    "percentile": 95.0,
+    "precision": 0.044412607449856735,
+    "recall": 0.17103448275862068,
+    "f1_score": 0.07051464316178561,
+    "flag_rate": 0.05162340063604763,
+    "confusion_matrix": [
+        [
+            101382,
+            5336
+        ],
+        [
+            1202,
+            248
+        ]
+    ],
+    "epochs_trained": 7,
+    "best_parameters": {
+        "units1": 64,
+        "units2": 16,
+        "bottleneck": 8,
+        "dropout": 0.004116898859160489,
+        "learning_rate": 0.008706020878304856,
+        "batch_size": 256
+    }
+}

@@ -1,7 +1,7 @@
 """
 explain.py  (Member 4)
-Run AFTER evaluate.py:   python3 -m src.explain
-      python3 -m src.explain --n-explain 200 --n-background 100
+Run AFTER evaluate.py:   python -m src.explain
+      python -m src.explain --n-explain 200 --n-background 100
 
 Produces
   graphs/shap_bar.png, graphs/shap_beeswarm.png        global importance of the HYBRID score
@@ -22,12 +22,13 @@ import numpy as np
 import pandas as pd
 import shap
 
-from src.hybrid import (GRAPHS_DIR, MONTH, RESULTS_DIR, HybridScorer, load_artifacts,
-                        load_processed, predict_components)
+from src.hybrid import (GRAPHS_DIR, MONTH, RESULTS_DIR, TARGET, HybridScorer, feature_names,
+                        load_artifacts, load_data, predict_components)
 
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--data", default=None)
     ap.add_argument("--test-months", type=int, nargs="+", default=None)
     ap.add_argument("--n-background", type=int, default=100)
     ap.add_argument("--n-explain", type=int, default=200, help="rows per class (fraud / legit) to explain")
@@ -36,17 +37,15 @@ def main():
     rng = np.random.default_rng(args.seed)
     RESULTS_DIR.mkdir(exist_ok=True); GRAPHS_DIR.mkdir(exist_ok=True)
 
-    Xdf, ydf = load_processed()
-    m = Xdf[MONTH].round().astype(int).to_numpy()
-    test_months = args.test_months or [int(m.max())]
-    mask = np.isin(m, test_months)
-    df_test = Xdf[mask].reset_index(drop=True)
-    y = ydf[mask].to_numpy().astype(int)
+    df = load_data(args.data)
+    test_months = args.test_months or [sorted(df[MONTH].unique())[-1]]
+    df_test = df[df[MONTH].isin(test_months)].reset_index(drop=True)
 
     art = load_artifacts()
     hyb = HybridScorer.load(art["dnn"], art["ae"])
     X, p, e = predict_components(art, df_test)
-    names = list(df_test.columns)
+    y = df_test[TARGET].to_numpy()
+    names = feature_names(art["prep"], X.shape[1])
 
     # ------------------------------------------------------------------
     # Autoencoder: which features reconstruct worst for fraud vs legit? (cheap, no SHAP needed)

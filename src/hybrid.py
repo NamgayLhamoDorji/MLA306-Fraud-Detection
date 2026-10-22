@@ -10,7 +10,6 @@ models/ae_scaler.pkl and exposes it as `artifacts["ae_input"]`, which maps the
 DNN-scaled feature matrix to the autoencoder's input.
 """
 from __future__ import annotations
-
 import json
 from pathlib import Path
 import warnings
@@ -18,7 +17,7 @@ import warnings
 import joblib
 import numpy as np
 import pandas as pd
-from tensorflow.keras.models import load_model
+from tensorflow.keras.models import load_model # type: ignore
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"

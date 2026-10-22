@@ -1,5 +1,5 @@
 {
-    "threshold": 0.00902207000181078,
+    "threshold": 0.009923799894750118,
     "percentile_of_normal_val_errors": 95.0,
     "clip_value": 5.0,
     "dropped_columns": [
@@ -55,20 +55,20 @@
     ],
     "selected_columns": [
         "device_os_windows",
-        "customer_age",
         "credit_risk_score",
-        "current_address_months_count",
+        "customer_age",
         "proposed_credit_limit",
+        "current_address_months_count",
         "income",
         "date_of_birth_distinct_emails_4w",
         "keep_alive_session"
     ],
     "keep_idx": [
         44,
-        4,
         13,
-        3,
+        4,
         19,
+        3,
         0,
         12,
         22

@@ -24,3 +24,4 @@ logs/
 # Keep visualization graphs
 # graphs/ is intentionally not ignoredprocessed/
 
+results/score_cache.npz

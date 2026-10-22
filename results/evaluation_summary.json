@@ -1,0 +1,29 @@
+{
+    "autoencoder": "Member 3 autoencoder",
+    "ae_features": [
+        "device_os_windows",
+        "credit_risk_score",
+        "customer_age",
+        "proposed_credit_limit",
+        "current_address_months_count",
+        "income",
+        "date_of_birth_distinct_emails_4w",
+        "keep_alive_session"
+    ],
+    "validation_months": [
+        6
+    ],
+    "test_months": [
+        7
+    ],
+    "target_fpr": 0.01,
+    "hybrid_ae_weight": 0.05,
+    "hybrid_dnn_weight": 0.95,
+    "thresholds": {
+        "DNN only": 0.932422935962677,
+        "Autoencoder only": 0.02824605256319046,
+        "Hybrid": 0.9257421931256979
+    },
+    "test_rows": 96843,
+    "test_fraud_cases": 1428
+}

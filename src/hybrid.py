@@ -2,9 +2,16 @@
 
 This module supports evaluation and SHAP explanations. If the testing-only
 stand-in autoencoder is loaded, its results must not be presented as final.
+
+The autoencoder (Member 3) was trained on 8 selected features, using its own
+StandardScaler (fitted on 46 columns, "month" dropped) and a clip of +/-5.
+`load_artifacts` rebuilds that exact pipeline from models/ae_threshold.json and
+models/ae_scaler.pkl and exposes it as `artifacts["ae_input"]`, which maps the
+DNN-scaled feature matrix to the autoencoder's input.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import warnings
 
@@ -23,6 +30,12 @@ GRAPHS_DIR = ROOT / "graphs"
 TARGET = "fraud_bool"
 MONTH = "month"
 TARGET_FPR = 0.01
+
+# Keys that may hold the autoencoder's selected feature list in ae_threshold.json.
+_AE_FEATURE_KEYS = (
+    "selected_columns", "features", "feature_names", "feature_list",
+    "top_features", "top_8", "ae_features", "selected_features", "feature_set",
+)
 
 
 def load_processed():
@@ -52,10 +65,147 @@ def load_data(path=None):
     return pd.read_csv(data_path)
 
 
+def feature_names(prep, n_features=None):
+    """Get feature names from the fitted scaler where available."""
+    names = getattr(prep, "feature_names_in_", None)
+    if names is not None:
+        names = list(names)
+    else:
+        count = n_features if n_features is not None else len(prep.mean_)
+        names = [f"feature_{i}" for i in range(count)]
+    if n_features is not None:
+        names = names[:n_features]
+    return names
+
+
+def _ae_n_inputs(ae):
+    """Number of input features the autoencoder expects."""
+    shape = getattr(ae, "input_shape", None)
+    if shape is not None:
+        if isinstance(shape, list):
+            shape = shape[0]
+        return int(shape[-1])
+    return int(ae.layers[0].kernel.shape[0])
+
+
+def _find_feature_list(cfg):
+    """Look for a list of feature names in a loaded JSON config."""
+    if not isinstance(cfg, dict):
+        return None
+    for key in _AE_FEATURE_KEYS:
+        value = cfg.get(key)
+        if isinstance(value, list) and value and all(isinstance(v, str) for v in value):
+            return list(value)
+    for value in cfg.values():  # one level of nesting
+        if isinstance(value, dict):
+            found = _find_feature_list(value)
+            if found:
+                return found
+    return None
+
+
+def _load_ae_config(ae, expected):
+    """Read which features, scaler and clip the autoencoder was trained with."""
+    n_in = _ae_n_inputs(ae)
+
+    cfg = {}
+    cfg_path = MODELS_DIR / "ae_threshold.json"
+    if cfg_path.exists():
+        try:
+            cfg = json.loads(cfg_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            cfg = {}
+
+    features = _find_feature_list(cfg)
+    if features is None and n_in == len(expected):
+        features = list(expected)  # AE used every feature
+
+    if features is None:
+        raise ValueError(
+            f"Autoencoder expects {n_in} inputs but no feature list was found in "
+            f"{cfg_path.name}. Paste its contents so the key can be mapped."
+        )
+
+    missing = [f for f in features if f not in expected]
+    if missing:
+        raise ValueError(f"AE features not in DNN feature set: {missing}")
+    if len(features) != n_in:
+        raise ValueError(
+            f"AE expects {n_in} inputs but feature list has {len(features)}."
+        )
+
+    ae_scaler = None
+    ae_scaler_path = MODELS_DIR / "ae_scaler.pkl"
+    if ae_scaler_path.exists():
+        ae_scaler = joblib.load(ae_scaler_path)
+
+    # Columns the AE scaler was fitted on (46 columns, "month" dropped).
+    scaler_cols = None
+    if ae_scaler is not None and getattr(ae_scaler, "feature_names_in_", None) is not None:
+        scaler_cols = list(ae_scaler.feature_names_in_)
+    elif cfg.get("feature_columns"):
+        scaler_cols = list(cfg["feature_columns"])
+
+    if ae_scaler is not None:
+        if scaler_cols is None:
+            raise ValueError(
+                "ae_scaler.pkl has no feature names and ae_threshold.json has no "
+                "'feature_columns'; cannot map the AE scaler to columns."
+            )
+        bad = [f for f in features if f not in scaler_cols]
+        if bad:
+            raise ValueError(f"AE features not in AE scaler columns: {bad}")
+        bad = [c for c in scaler_cols if c not in expected]
+        if bad:
+            raise ValueError(f"AE scaler columns not in DNN feature set: {bad}")
+
+    return {
+        "features": features,
+        "ae_scaler": ae_scaler,
+        "scaler_cols": scaler_cols,
+        "clip": cfg.get("clip_value"),
+    }
+
+
+def make_ae_input(artifacts):
+    """Return f(X_dnn_scaled) -> array in exactly the form the autoencoder expects.
+
+    Mirrors Member 3's prepare_features: raw values -> AE scaler -> clip ->
+    keep the selected columns (by name, in the saved order).
+    """
+    dnn_scaler = artifacts["scaler"]
+    expected = feature_names(dnn_scaler)
+    features = artifacts["ae_features"]
+    ae_scaler = artifacts.get("ae_scaler")
+    scaler_cols = artifacts.get("ae_scaler_cols")
+    clip = artifacts.get("ae_clip")
+
+    if ae_scaler is None:
+        idx = [expected.index(f) for f in features]
+
+        def ae_input(X):
+            return np.asarray(X, dtype=np.float32)[:, idx]  # DNN-scaled values
+
+        return ae_input
+
+    sel = [scaler_cols.index(f) for f in features]
+
+    def ae_input(X):
+        raw = dnn_scaler.inverse_transform(np.asarray(X, dtype=float))  # unscaled
+        frame = pd.DataFrame(raw, columns=expected)[scaler_cols]
+        z = ae_scaler.transform(frame)
+        if clip is not None:
+            z = np.clip(z, -float(clip), float(clip))
+        return z[:, sel].astype("float32")
+
+    return ae_input
+
+
 def load_artifacts():
     """Load the trained DNN, feature scaler, and available autoencoder."""
     dnn_path = MODELS_DIR / "dnn_improved.keras"
     scaler_path = MODELS_DIR / "dnn_improved_scaler.pkl"
+    ae_best_path = MODELS_DIR / "autoencoder_best.keras"  # saved by autoencoder.py
     ae_path = MODELS_DIR / "autoencoder.keras"
     standin_path = MODELS_DIR / "autoencoder_standin.keras"
 
@@ -67,7 +217,10 @@ def load_artifacts():
     dnn = load_model(dnn_path)
     scaler = joblib.load(scaler_path)
 
-    if ae_path.exists():
+    if ae_best_path.exists():
+        ae = load_model(ae_best_path)
+        ae_name = "Member 3 autoencoder"
+    elif ae_path.exists():
         ae = load_model(ae_path)
         ae_name = "Member 3 autoencoder"
     elif standin_path.exists():
@@ -80,30 +233,26 @@ def load_artifacts():
         ae_name = "TESTING-ONLY stand-in"
     else:
         raise FileNotFoundError(
-            "No autoencoder found. Expected models/autoencoder.keras "
+            "No autoencoder found. Expected models/autoencoder_best.keras "
             "from Member 3."
         )
 
-    return {
+    expected = feature_names(scaler)
+    ae_cfg = _load_ae_config(ae, expected)
+
+    artifacts = {
         "dnn": dnn,
         "ae": ae,
         "prep": scaler,
         "scaler": scaler,
         "ae_name": ae_name,
+        "ae_features": ae_cfg["features"],
+        "ae_scaler": ae_cfg["ae_scaler"],
+        "ae_scaler_cols": ae_cfg["scaler_cols"],
+        "ae_clip": ae_cfg["clip"],
     }
-
-
-def feature_names(prep, n_features=None):
-    """Get feature names from the fitted scaler where available."""
-    names = getattr(prep, "feature_names_in_", None)
-    if names is not None:
-        names = list(names)
-    else:
-        count = n_features if n_features is not None else len(prep.mean_)
-        names = [f"feature_{i}" for i in range(count)]
-    if n_features is not None:
-        names = names[:n_features]
-    return names
+    artifacts["ae_input"] = make_ae_input(artifacts)
+    return artifacts
 
 
 def _prepare_features(artifacts, frame):
@@ -135,8 +284,9 @@ def predict_components(artifacts, frame):
     probabilities = np.asarray(
         artifacts["dnn"].predict(X, verbose=0)
     ).reshape(-1)
-    reconstructed = artifacts["ae"].predict(X, verbose=0)
-    errors = np.mean(np.square(X - reconstructed), axis=1)
+    A = artifacts["ae_input"](X)
+    reconstructed = artifacts["ae"].predict(A, verbose=0)
+    errors = np.mean(np.square(A - reconstructed), axis=1)
     return X, probabilities, errors
 
 
@@ -165,9 +315,11 @@ def tpr_at_fpr(y_true, scores, target_fpr=TARGET_FPR):
 class HybridScorer:
     """Blend DNN probability with a normalized AE reconstruction-anomaly score."""
 
-    def __init__(self, dnn=None, ae=None, weight=0.5, target_fpr=TARGET_FPR):
+    def __init__(self, dnn=None, ae=None, weight=0.5, target_fpr=TARGET_FPR,
+                 ae_input=None):
         self.dnn = dnn
         self.ae = ae
+        self.ae_input = ae_input  # maps DNN-scaled X to the AE's input
         self.weight = float(weight)  # weight assigned to AE score
         self.w = self.weight
         self.threshold = None
@@ -187,7 +339,6 @@ class HybridScorer:
         p = np.asarray(probabilities, dtype=float).reshape(-1)
         ae_score = self._normalize_ae(errors)
         return (1.0 - self.weight) * p + self.weight * ae_score
-
 
     def combine(self, probabilities, errors):
         """Combine DNN probabilities and autoencoder anomaly errors."""
@@ -239,8 +390,9 @@ class HybridScorer:
             raise ValueError("DNN and autoencoder models are required for score(X).")
         X = np.asarray(X)
         p = np.asarray(self.dnn.predict(X, verbose=0)).reshape(-1)
-        reconstructed = self.ae.predict(X, verbose=0)
-        errors = np.mean(np.square(X - reconstructed), axis=1)
+        A = self.ae_input(X) if self.ae_input is not None else X
+        reconstructed = self.ae.predict(A, verbose=0)
+        errors = np.mean(np.square(A - reconstructed), axis=1)
         return self.score_components(p, errors)
 
     def predict(self, probabilities, errors):
@@ -263,7 +415,7 @@ class HybridScorer:
         return path
 
     @classmethod
-    def load(cls, dnn=None, ae=None, path=None):
+    def load(cls, dnn=None, ae=None, path=None, ae_input=None):
         path = Path(path) if path else MODELS_DIR / "hybrid_calibration.npz"
         if not path.exists():
             raise FileNotFoundError(
@@ -275,7 +427,9 @@ class HybridScorer:
                 ae=ae,
                 weight=float(saved["weight"]),
                 target_fpr=float(saved["target_fpr"]),
+                ae_input=ae_input,
             )
             scorer.sorted_ae = saved["sorted_ae"].copy()
             scorer.threshold_ = float(saved["threshold"])
+            scorer.threshold = scorer.threshold_
         return scorer

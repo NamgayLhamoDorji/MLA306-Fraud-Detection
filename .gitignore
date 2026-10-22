@@ -25,3 +25,4 @@ logs/
 # graphs/ is intentionally not ignoredprocessed/
 
 results/score_cache.npz
+test_with_labels.csv

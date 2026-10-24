@@ -1,28 +1,24 @@
 # Python environment
-venv/
 .venv/
+venv/
 __pycache__/
 *.pyc
 
-# Dataset files
-Base.csv
-data/
+# Dataset (keep the folder, not the data)
+data/*
+!data/.gitkeep
 
-# Generated processed data and trained models
+# Generated data and trained models
 processed/
-models/
 
-# Training logs
+# Training logs and the app's prediction log
 logs/
 
-# Ignore CSV files by default
+# Ignore CSV files by default, keep experiment result tables
 *.csv
-
-# Keep experiment result CSVs
 !results/*.csv
 
-# Keep visualization graphs
-# graphs/ is intentionally not ignoredprocessed/
-
+# Large cache created by src.evaluate
 results/score_cache.npz
-test_with_labels.csv
+
+# graphs/ is intentionally not ignored (plots go in the report)

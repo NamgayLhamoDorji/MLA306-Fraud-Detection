@@ -3,11 +3,19 @@
 This module supports evaluation and SHAP explanations. If the testing-only
 stand-in autoencoder is loaded, its results must not be presented as final.
 
-The autoencoder (Member 3) was trained on 8 selected features, using its own
-StandardScaler (fitted on 46 columns, "month" dropped) and a clip of +/-5.
-`load_artifacts` rebuilds that exact pipeline from models/ae_threshold.json and
-models/ae_scaler.pkl and exposes it as `artifacts["ae_input"]`, which maps the
-DNN-scaled feature matrix to the autoencoder's input.
+The DNN is trained WITHOUT the "month" column (46 features). The autoencoder
+(Member 3) uses 8 selected features, its own StandardScaler (fitted on the same
+46 columns) and a clip of +/-5. `load_artifacts` rebuilds that exact pipeline from
+models/ae_threshold.json and models/ae_scaler.pkl and exposes it as
+`artifacts["ae_input"]`, which maps the DNN-scaled feature matrix to the
+autoencoder's input.
+
+Changes in this version
+    - Loads models/dnn_final.keras (+ dnn_final_scaler.pkl), falling back to
+      dnn_improved with a warning.
+    - Raw-format data is one-hot encoded WITHOUT drop_first and then aligned to the
+      training columns, so a file that lacks a category can no longer be mis-encoded.
+    - predict() calls use large batches (much faster on 1M rows and inside SHAP).
 """
 from __future__ import annotations
 import json
@@ -38,7 +46,12 @@ _AE_FEATURE_KEYS = (
 
 
 def load_processed():
-    """Return concatenated processed features and labels (train, val, test)."""
+    """Return concatenated processed features and labels (train, val, test).
+
+    The features still contain the "month" column so that evaluation can split by
+    month. The models never see it: _prepare_features keeps only the columns the
+    DNN scaler was fitted on.
+    """
     x_frames, y_frames = [], []
     for split in ("train", "val", "test"):
         x_path = PROCESSED_DIR / f"X_{split}.csv"
@@ -138,7 +151,7 @@ def _load_ae_config(ae, expected):
     if ae_scaler_path.exists():
         ae_scaler = joblib.load(ae_scaler_path)
 
-    # Columns the AE scaler was fitted on (46 columns, "month" dropped).
+    # Columns the AE scaler was fitted on ("month" dropped).
     scaler_cols = None
     if ae_scaler is not None and getattr(ae_scaler, "feature_names_in_", None) is not None:
         scaler_cols = list(ae_scaler.feature_names_in_)
@@ -202,8 +215,18 @@ def make_ae_input(artifacts):
 
 def load_artifacts():
     """Load the trained DNN, feature scaler, and available autoencoder."""
-    dnn_path = MODELS_DIR / "dnn_improved.keras"
-    scaler_path = MODELS_DIR / "dnn_improved_scaler.pkl"
+    dnn_path = MODELS_DIR / "dnn_final.keras"          # saved by tune_dnn_optuna.py
+    scaler_path = MODELS_DIR / "dnn_final_scaler.pkl"
+    dnn_name = "dnn_final (Optuna-tuned)"
+    if not (dnn_path.exists() and scaler_path.exists()):
+        dnn_path = MODELS_DIR / "dnn_improved.keras"
+        scaler_path = MODELS_DIR / "dnn_improved_scaler.pkl"
+        dnn_name = "dnn_improved (fallback)"
+        warnings.warn(
+            "models/dnn_final.keras not found; falling back to dnn_improved. "
+            "Run tune_dnn_optuna.py to create the final DNN.",
+            RuntimeWarning,
+        )
     ae_best_path = MODELS_DIR / "autoencoder_best.keras"  # saved by autoencoder.py
     ae_path = MODELS_DIR / "autoencoder.keras"
     standin_path = MODELS_DIR / "autoencoder_standin.keras"
@@ -241,6 +264,7 @@ def load_artifacts():
 
     artifacts = {
         "dnn": dnn,
+        "dnn_name": dnn_name,
         "ae": ae,
         "prep": scaler,
         "scaler": scaler,
@@ -254,17 +278,25 @@ def load_artifacts():
     return artifacts
 
 
+def encode_like_training(frame, expected):
+    """Return `frame` with exactly the `expected` columns, in order.
+
+    Processed data already has the columns. Raw data is one-hot encoded WITHOUT
+    drop_first; the baseline category columns are simply not in `expected`, so
+    reindex discards them. Extra columns (for example "month") are discarded too.
+    """
+    data = frame.drop(columns=[TARGET], errors="ignore").copy()
+    data = data.drop(columns=["Unnamed: 0"], errors="ignore")
+    if not set(expected).issubset(data.columns):
+        data = pd.get_dummies(data, dtype=int)
+    return data.reindex(columns=expected, fill_value=0)
+
+
 def _prepare_features(artifacts, frame):
     """Align raw/processed columns with the DNN scaler and scale them."""
     scaler = artifacts.get("scaler", artifacts.get("prep"))
     expected = feature_names(scaler)
-    data = frame.drop(columns=[TARGET], errors="ignore").copy()
-    data = data.drop(columns=["Unnamed: 0"], errors="ignore")
-
-    if not set(expected).issubset(data.columns):
-        data = pd.get_dummies(data, drop_first=True, dtype=int)
-
-    data = data.reindex(columns=expected, fill_value=0)
+    data = encode_like_training(frame, expected)
     data = data.replace([np.inf, -np.inf], np.nan)
 
     # The scaler was fitted on the training features; use its training means
@@ -277,14 +309,14 @@ def _prepare_features(artifacts, frame):
     return scaler.transform(data)
 
 
-def predict_components(artifacts, frame):
+def predict_components(artifacts, frame, batch_size=4096):
     """Return scaled X, DNN fraud probabilities, and AE reconstruction errors."""
     X = _prepare_features(artifacts, frame)
     probabilities = np.asarray(
-        artifacts["dnn"].predict(X, verbose=0)
+        artifacts["dnn"].predict(X, batch_size=batch_size, verbose=0)
     ).reshape(-1)
     A = artifacts["ae_input"](X)
-    reconstructed = artifacts["ae"].predict(A, verbose=0)
+    reconstructed = artifacts["ae"].predict(A, batch_size=batch_size, verbose=0)
     errors = np.mean(np.square(A - reconstructed), axis=1)
     return X, probabilities, errors
 
@@ -383,14 +415,14 @@ class HybridScorer:
         self.threshold = self.threshold_
         return self
 
-    def score(self, X):
+    def score(self, X, batch_size=1024):
         """Score already-scaled feature rows; used by SHAP and the app."""
         if self.dnn is None or self.ae is None:
             raise ValueError("DNN and autoencoder models are required for score(X).")
         X = np.asarray(X)
-        p = np.asarray(self.dnn.predict(X, verbose=0)).reshape(-1)
+        p = np.asarray(self.dnn.predict(X, batch_size=batch_size, verbose=0)).reshape(-1)
         A = self.ae_input(X) if self.ae_input is not None else X
-        reconstructed = self.ae.predict(A, verbose=0)
+        reconstructed = self.ae.predict(A, batch_size=batch_size, verbose=0)
         errors = np.mean(np.square(A - reconstructed), axis=1)
         return self.score_components(p, errors)
 

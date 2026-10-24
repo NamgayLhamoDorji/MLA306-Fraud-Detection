@@ -1,4 +1,5 @@
 {
+    "dnn": "dnn_final (Optuna-tuned)",
     "autoencoder": "Member 3 autoencoder",
     "ae_features": [
         "device_os_windows",
@@ -17,13 +18,20 @@
         7
     ],
     "target_fpr": 0.01,
-    "hybrid_ae_weight": 0.05,
-    "hybrid_dnn_weight": 0.95,
-    "thresholds": {
-        "DNN only": 0.932422935962677,
-        "Autoencoder only": 0.02824605256319046,
-        "Hybrid": 0.9257421931256979
+    "hybrid_ae_weight": 0.0,
+    "hybrid_dnn_weight": 1.0,
+    "or_rule_thresholds": {
+        "dnn": 0.9482616782188416,
+        "autoencoder": 0.04577725753188133,
+        "each_fpr": 0.005
     },
+    "thresholds": {
+        "DNN final": 0.9246628284454346,
+        "Autoencoder only": 0.02824605256319046,
+        "Hybrid blend": 0.9246628284454346,
+        "Hybrid OR rule": 1.0
+    },
+    "bootstrap_resamples": 200,
     "test_rows": 96843,
     "test_fraud_cases": 1428
 }

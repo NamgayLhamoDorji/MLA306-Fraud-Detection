@@ -4,7 +4,7 @@ Run from the project root:
     streamlit run app/app.py
 
 Uses the real trained models through src/hybrid.py:
-    DNN (models/dnn_improved.keras) + autoencoder (models/autoencoder_best.keras),
+    DNN (models/dnn_final.keras) + autoencoder (models/autoencoder_best.keras),
     blended by the hybrid scorer calibrated in src.evaluate (models/hybrid_calibration.npz).
 
 Features
@@ -84,7 +84,6 @@ FRIENDLY = {
     "keep_alive_session": "Keep-alive session",
     "device_distinct_emails_8w": "Distinct emails on this device (8 weeks)",
     "device_fraud_count": "Device fraud count",
-    "month": "Month of application",
 }
 BINARY = {"email_is_free", "phone_home_valid", "phone_mobile_valid", "has_other_cards",
           "foreign_request", "keep_alive_session"}
@@ -112,7 +111,7 @@ def load_or_stop():
     except FileNotFoundError as err:
         st.error(
             f"A required model file is missing:\n\n`{err}`\n\n"
-            "Run the pipeline first: `python preprocess.py`, `python dnn_improved.py`, "
+            "Run the pipeline first: `python preprocess.py`, `python tune_dnn_optuna.py`, "
             "`python autoencoder.py`, then `python -m src.evaluate`."
         )
     except ValueError as err:
@@ -158,7 +157,7 @@ def check_batch_columns(art, df):
     expected = feature_names(art["scaler"])
     data = df.drop(columns=[TARGET, "Unnamed: 0"], errors="ignore")
     if not set(expected).issubset(data.columns):
-        data = pd.get_dummies(data, drop_first=True, dtype=int)
+        data = pd.get_dummies(data, dtype=int)
     missing = [c for c in expected if c not in data.columns]
     if len(missing) > len(expected) // 2:
         raise ValueError(
@@ -212,7 +211,7 @@ def explain_application(art, hyb, background, x_scaled):
 
     explainer = shap.Explainer(f, shap.maskers.Independent(background),
                                algorithm="permutation")
-    sv = explainer(x, max_evals=2 * x.shape[1] + 1)
+    sv = explainer(x, max_evals=6 * x.shape[1])
     names = feature_names(art["scaler"])
     raw = art["scaler"].inverse_transform(x.astype(float))[0]
     return build_reasons(names, raw, np.asarray(sv.values)[0])
@@ -396,6 +395,7 @@ def reset_to_averages(art):
 def render_sidebar(art, hyb):
     with st.sidebar:
         st.header("Model info")
+        st.write(f"**DNN:** {art['dnn_name']}")
         st.write(f"**Autoencoder:** {art['ae_name']}")
         st.write(f"**Blend:** {1 - hyb.weight:.0%} DNN + {hyb.weight:.0%} autoencoder")
         st.write(f"**Alert threshold:** {hyb.threshold_:.4f}")
@@ -444,7 +444,7 @@ def render_single(art, hyb, examples, background):
     if note:
         st.info(
             f"Loaded a real application from the unseen test month. In the dataset it was "
-            f"**{'fraud' if note['is_fraud'] else 'legitimate'}**. All 47 model inputs come "
+            f"**{'fraud' if note['is_fraud'] else 'legitimate'}**. All 46 model inputs come "
             "from that application; the form shows the main ones. Change them and score "
             "again to see how the result moves."
         )

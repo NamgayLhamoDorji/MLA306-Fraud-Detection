@@ -11,7 +11,7 @@ Produces
 SHAP is computed on the full hybrid score (DNN + autoencoder), model-agnostic (Permutation explainer),
 so it works with any Keras version.
 
-The autoencoder only sees 8 features (art["ae_features"]); the DNN sees all 47.
+The autoencoder only sees 8 features (art["ae_features"]); the DNN sees all 46.
 SHAP is explained over the 47 DNN-scaled inputs, and HybridScorer maps them to the
 autoencoder's own input through art["ae_input"].
 """
@@ -35,7 +35,7 @@ def main():
     ap.add_argument("--data", default=None)
     ap.add_argument("--test-months", type=int, nargs="+", default=None)
     ap.add_argument("--n-background", type=int, default=100)
-    ap.add_argument("--n-explain", type=int, default=200, help="rows per class (fraud / legit) to explain")
+    ap.add_argument("--n-explain", type=int, default=100, help="rows per class (fraud / legit) to explain")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
     rng = np.random.default_rng(args.seed)
@@ -84,7 +84,7 @@ def main():
     f = lambda Z: hyb.score(np.asarray(Z, dtype=np.float32))
     explainer = shap.Explainer(f, shap.maskers.Independent(X_bg), algorithm="permutation")
     print(f"[shap] explaining {len(X_explain)} rows x {X.shape[1]} features - this can take several minutes ...")
-    sv = explainer(X_explain, max_evals=2 * X.shape[1] + 1)
+    sv = explainer(X_explain, max_evals=6 * X.shape[1])
     sv = shap.Explanation(values=sv.values, base_values=sv.base_values, data=X_explain, feature_names=names)
 
     imp = pd.DataFrame({"feature": names, "mean_abs_shap": np.abs(sv.values).mean(0)})

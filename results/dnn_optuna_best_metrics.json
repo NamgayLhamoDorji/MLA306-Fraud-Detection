@@ -1,28 +1,32 @@
 {
     "validation_month": 6,
     "threshold": 0.5,
-    "pr_auc": 0.1658616610649377,
-    "roc_auc": 0.8866725259158684,
-    "precision": 0.04583364085910399,
-    "recall": 0.856551724137931,
-    "f1_score": 0.08701134930643127,
+    "pr_auc": 0.16180625304982618,
+    "roc_auc": 0.886771462139018,
+    "precision": 0.05056250261385973,
+    "recall": 0.8337931034482758,
+    "f1_score": 0.09534324356295099,
     "confusion_matrix": [
         [
-            80862,
-            25856
+            84016,
+            22702
         ],
         [
-            208,
-            1242
+            241,
+            1209
         ]
     ],
+    "epochs_trained": 12,
+    "features": 46,
     "best_parameters": {
-        "units1": 256,
-        "units2": 64,
-        "dropout1": 0.15961470446025172,
-        "dropout2": 0.10110442342472048,
-        "learning_rate": 0.004274869455295219,
-        "batch_size": 512,
+        "n_layers": 2,
+        "units_1": 64,
+        "dropout_1": 0.23510453803507267,
+        "units_2": 256,
+        "dropout_2": 0.25779137891849074,
+        "activation": "leaky_relu",
+        "learning_rate": 0.0027444572291305375,
+        "batch_size": 256,
         "optimizer": "Adam"
     }
 }

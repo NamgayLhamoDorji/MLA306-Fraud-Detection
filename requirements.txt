@@ -1,6 +1,7 @@
 pandas
 numpy
 scikit-learn
+joblib
 imbalanced-learn
 tensorflow
 optuna
@@ -9,4 +10,3 @@ matplotlib
 streamlit
 pyarrow
 tensorboard
-streamlit

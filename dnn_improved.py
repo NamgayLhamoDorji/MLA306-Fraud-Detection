@@ -1,4 +1,3 @@
-
 import os
 import json
 import numpy as np
@@ -29,10 +28,10 @@ tf.random.set_seed(42)
 # 2. Load training and validation data
 print("\n1. Loading data...")
 
-X_train_df = pd.read_csv("processed/X_train.csv")
+X_train_df = pd.read_csv("processed/X_train.csv").drop(columns=["month"])
 y_train = pd.read_csv("processed/y_train.csv").iloc[:, 0].to_numpy()
 
-X_val_df = pd.read_csv("processed/X_val.csv")
+X_val_df = pd.read_csv("processed/X_val.csv").drop(columns=["month"])
 y_val = pd.read_csv("processed/y_val.csv").iloc[:, 0].to_numpy()
 
 print("Training shape:", X_train_df.shape)

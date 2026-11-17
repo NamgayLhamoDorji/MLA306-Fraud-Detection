@@ -1,13 +1,13 @@
 """
-FRAUD DETECTION - EVALUATION GRAPHS (final model, unseen month 7)
+FRAUD DETECTION - EVALUATION GRAPHS (final model, unseen test split)
 
 Regenerates:
     graphs/confusion_matrix.png
     graphs/precision_recall_curve.png
     graphs/threshold_comparison.png
 
-Uses the FINAL DNN on the held-out test month (month 7) from processed/.
-The alert threshold is chosen on validation month 6 (1% false-positive rate),
+Uses the FINAL DNN on the held-out stratified test split from processed/.
+The alert threshold is chosen on the stratified validation split (1% false-positive rate),
 never on the test data.
 
 Before running: check the model file names with   ls models
@@ -38,7 +38,7 @@ TARGET_FPR = 0.01                            # 1% of legitimate applications fla
 OUT_DIR = "graphs"
 
 print("=" * 55)
-print("FRAUD DETECTION - EVALUATION GRAPHS (final DNN, month 7)")
+print("FRAUD DETECTION - EVALUATION GRAPHS (final DNN, test split)")
 print("=" * 55)
 
 
@@ -81,7 +81,7 @@ def metrics_at(y, s, thr):
 
 
 # -------------------------------------------------------------------- load
-print("\n1. Loading processed data (validation = month 6, test = month 7)...")
+print("\n1. Loading processed data (stratified validation and test splits)...")
 X_val, y_val = load_xy("val")
 X_test, y_test = load_xy("test")
 print(f"   Validation rows: {len(y_val)}   Test rows: {len(y_test)}")
@@ -118,8 +118,8 @@ disp = ConfusionMatrixDisplay(cm, display_labels=["Legitimate", "Fraud"])
 fig, ax = plt.subplots(figsize=(6.5, 5.5))
 disp.plot(ax=ax, values_format="d", cmap="Blues", colorbar=True)
 ax.set_title(
-    f"DNN final: Confusion Matrix, month 7\n"
-    f"(threshold {thr:.3f}, set for {TARGET_FPR:.0%} false-positive rate on month 6)"
+    f"DNN final: Confusion Matrix, test split\n"
+    f"(threshold {thr:.3f}, set for {TARGET_FPR:.0%} false-positive rate on validation)"
 )
 fig.tight_layout()
 fig.savefig(f"{OUT_DIR}/confusion_matrix.png", dpi=300)
@@ -137,7 +137,7 @@ ax.scatter([recall_op], [precision_op], color="red", zorder=5,
            label=f"Operating point ({TARGET_FPR:.0%} FPR)")
 ax.set_xlabel("Recall")
 ax.set_ylabel("Precision")
-ax.set_title(f"Precision-Recall Curve, month 7 (AP = {ap:.3f})")
+ax.set_title(f"Precision-Recall Curve, test split (AP = {ap:.3f})")
 ax.grid(True)
 ax.legend()
 fig.tight_layout()
@@ -159,7 +159,7 @@ ax.axvline(thr, color="black", linestyle="--",
            label=f"{TARGET_FPR:.0%} FPR threshold ({thr:.2f})")
 ax.set_xlabel("Classification threshold")
 ax.set_ylabel("Score")
-ax.set_title("DNN final: performance at different thresholds (month 7)")
+ax.set_title("DNN final: performance at different thresholds (test split)")
 ax.grid(True)
 ax.legend()
 fig.tight_layout()

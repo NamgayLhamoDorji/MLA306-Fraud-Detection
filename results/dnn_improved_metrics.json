@@ -2,20 +2,20 @@
     "model": "DNN with Batch Normalization and Dropout",
     "validation_month": 6,
     "threshold": 0.5,
-    "average_precision": 0.14733948524864363,
-    "roc_auc": 0.8851925184840675,
-    "precision": 0.04876593840876892,
-    "recall": 0.7908101571946796,
-    "f1_score": 0.09186683522966708,
+    "average_precision": 0.1487652890755294,
+    "roc_auc": 0.8841696760560311,
+    "precision": 0.04996331904706745,
+    "recall": 0.7823458282950423,
+    "f1_score": 0.09392806590933836,
     "confusion_matrix": [
         [
-            122832,
-            25514
+            123741,
+            24605
         ],
         [
-            346,
-            1308
+            360,
+            1294
         ]
     ],
-    "epochs_trained": 20
+    "epochs_trained": 24
 }

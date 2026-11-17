@@ -26,14 +26,12 @@ import numpy as np
 import pandas as pd
 import shap
 
-from src.hybrid import (GRAPHS_DIR, MONTH, RESULTS_DIR, TARGET, HybridScorer, feature_names,
-                        load_artifacts, load_data, predict_components)
+from src.hybrid import (GRAPHS_DIR, PROCESSED_DIR, RESULTS_DIR, TARGET, HybridScorer, feature_names,
+                        load_artifacts, predict_components)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default=None)
-    ap.add_argument("--test-months", type=int, nargs="+", default=None)
     ap.add_argument("--n-background", type=int, default=100)
     ap.add_argument("--n-explain", type=int, default=100, help="rows per class (fraud / legit) to explain")
     ap.add_argument("--seed", type=int, default=42)
@@ -41,9 +39,9 @@ def main():
     rng = np.random.default_rng(args.seed)
     RESULTS_DIR.mkdir(exist_ok=True); GRAPHS_DIR.mkdir(exist_ok=True)
 
-    df = load_data(args.data)
-    test_months = args.test_months or [sorted(df[MONTH].unique())[-1]]
-    df_test = df[df[MONTH].isin(test_months)].reset_index(drop=True)
+    # Explain only rows the models never saw: the stratified test split.
+    df_test = pd.read_csv(PROCESSED_DIR / "X_test.csv")
+    df_test[TARGET] = pd.read_csv(PROCESSED_DIR / "y_test.csv").iloc[:, 0].to_numpy()
 
     art = load_artifacts()
     hyb = HybridScorer.load(art["dnn"], art["ae"], ae_input=art["ae_input"])

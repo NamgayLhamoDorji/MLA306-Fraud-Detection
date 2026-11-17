@@ -9,14 +9,14 @@ IMPORTANT: delete results/score_cache.npz after retraining any model.
 What it does
     1. Scores every row with the final DNN and the autoencoder.
     2. Calibrates the hybrid blend and ALL alert thresholds on the VALIDATION
-       month only (month 6).
-    3. Reports results on the untouched TEST month (month 7) for:
+       split only (the stratified validation file).
+    3. Reports results on the untouched TEST split (stratified test file) for:
          DNN baseline, DNN improved, DNN final, autoencoder, hybrid blend,
          hybrid OR rule (flag if either model passes its own threshold).
        Same split, same metrics, same 1% false-positive-rate rule for all.
-    4. Adds 95% bootstrap intervals for PR-AUC and recall on month 7.
-    5. Fairness table on month 7 by age, employment status and income band.
-    6. Per-month metrics (months 0-5 were seen in training: optimistic).
+    4. Adds 95% bootstrap intervals for PR-AUC and recall on the test split.
+    5. Fairness table on the test split by age, employment status and income band.
+    6. Test-split metrics per month (stability check; the split is random, not by month).
 
 Outputs (results/): final_unseen_month_results.csv, fairness_month7.csv,
 monthly_metrics.csv, hybrid_weight_sweep.csv, evaluation_summary.json,
@@ -34,6 +34,7 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 from tensorflow.keras.models import load_model  # type: ignore
 
 from src.hybrid import (
+    PROCESSED_DIR,
     MODELS_DIR,
     MONTH,
     RESULTS_DIR,
@@ -47,9 +48,9 @@ from src.hybrid import (
     tpr_at_fpr,
 )
 
-TRAIN_MONTHS = list(range(0, 6))
-VAL_MONTHS = [6]
-TEST_MONTHS = [7]  # make sure this matches preprocess.py
+# Stratified (random) split: train / val / test come from processed/X_*.csv.
+# load_processed() stacks them in this order, so row ranges identify the split.
+SPLIT_NAMES = ("train", "val", "test")
 SCORE_CACHE = RESULTS_DIR / "score_cache.npz"
 N_BOOT = 200
 
@@ -60,14 +61,13 @@ EXTRA_DNNS = {
 }
 
 
-def period_of(month):
-    if month in TRAIN_MONTHS:
-        return "train (seen by models)"
-    if month in VAL_MONTHS:
-        return "validation"
-    if month in TEST_MONTHS:
-        return "test (unseen)"
-    return "other"
+def split_labels():
+    """Array of 0 (train), 1 (val), 2 (test) matching the rows of load_processed()."""
+    parts = []
+    for code, name in enumerate(SPLIT_NAMES):
+        n = len(pd.read_csv(PROCESSED_DIR / f"y_{name}.csv"))
+        parts.append(np.full(n, code, dtype=int))
+    return np.concatenate(parts)
 
 
 def metrics_at(y, scores, thr):
@@ -140,7 +140,7 @@ def score_saved_dnn(model_file, scaler_file, X):
 
 
 def fairness_table(X, y, s, thr, model):
-    """Alert rate, recall and false-positive rate per group (month 7)."""
+    """Alert rate, recall and false-positive rate per group (test split)."""
     emp_cols = [c for c in X.columns if c.startswith("employment_status_")]
     if emp_cols:
         emp = X[emp_cols].idxmax(axis=1).where(X[emp_cols].sum(axis=1) > 0,
@@ -188,12 +188,16 @@ def main():
     Xdf, ydf = load_processed()
     y = ydf.iloc[:, 0].to_numpy().astype(int).reshape(-1)
     months = Xdf[MONTH].to_numpy().astype(int)
-    val = np.isin(months, VAL_MONTHS)
-    test = np.isin(months, TEST_MONTHS)
-    print(f"[split] val months={VAL_MONTHS}  test months={TEST_MONTHS}  "
-          "(make sure this matches preprocess.py!)")
+    split = split_labels()
+    if len(split) != len(y):
+        raise ValueError("Split sizes do not match the data. Re-run preprocessing.")
+    val = split == 1
+    test = split == 2
+    print(f"[split] stratified split: train={int((split == 0).sum()):,}  "
+          f"val={int(val.sum()):,}  test={int(test.sum()):,}  "
+          f"fraud rate val={y[val].mean():.3%} test={y[test].mean():.3%}")
     if not val.any() or not test.any():
-        raise ValueError("Validation or test month has no rows. Check the month split.")
+        raise ValueError("Validation or test split is empty. Re-run preprocessing.")
 
     art = load_artifacts()
     print(f"[models] DNN: {art['dnn_name']}  |  AE: {art['ae_name']}")
@@ -227,7 +231,7 @@ def main():
     scorer.save()
     h = scorer.score_components(p, e)
     print(f"[hybrid] AE weight={scorer.weight:.2f}  DNN weight={1 - scorer.weight:.2f}  "
-          f"threshold={scorer.threshold_:.4f}  (chosen on validation month)")
+          f"threshold={scorer.threshold_:.4f}  (chosen on the validation split)")
     scorer.sweep_.to_csv(RESULTS_DIR / "hybrid_weight_sweep.csv", index=False)
 
     # OR rule from the proposal: flag if EITHER model passes its own threshold.
@@ -249,7 +253,7 @@ def main():
         "Hybrid OR rule": 1.0,
     }
 
-    # ---- final unseen-month results -------------------------------------
+    # ---- final unseen-test results -------------------------------------
     rows = []
 
     def add_row(name, s_test, thr):
@@ -271,34 +275,34 @@ def main():
     final_df = pd.DataFrame(rows)
     final_df.to_csv(RESULTS_DIR / "final_unseen_month_results.csv", index=False)
 
-    print(f"\n=== FINAL UNSEEN-MONTH RESULTS (thresholds set at "
+    print(f"\n=== FINAL UNSEEN TEST-SPLIT RESULTS (thresholds set at "
           f"{TARGET_FPR:.0%} FPR on validation) ===")
     show(final_df, ["model", "pr_auc", "pr_auc_ci_low", "pr_auc_ci_high", "roc_auc",
                     "precision", "recall", "recall_ci_low", "recall_ci_high", "f1",
                     "fpr", "recall_at_1pct_fpr"])
 
-    # ---- fairness on month 7 --------------------------------------------
+    # ---- fairness on the test split --------------------------------------------
     fair = pd.concat([
         fairness_table(X_test, y[test], scores[n][test], thresholds[n], n)
         for n in scores
     ], ignore_index=True)
     fair.to_csv(RESULTS_DIR / "fairness_month7.csv", index=False)
-    print("\n=== FAIRNESS (month 7, hybrid blend) ===")
+    print("\n=== FAIRNESS (test split, hybrid blend) ===")
     show(fair[fair["model"] == "Hybrid blend"],
          ["attribute", "group", "rows", "fraud", "alert_rate", "recall", "fpr"])
 
-    # ---- per-month stability ---------------------------------------------
+    # ---- stability across months, test rows only --------------------------
     monthly = []
-    for mo in sorted(np.unique(months)):
-        mk = months == mo
+    for mo in sorted(np.unique(months[test])):
+        mk = test & (months == mo)
         for name in scores:
-            monthly.append({"month": int(mo), "period": period_of(int(mo)),
+            monthly.append({"month": int(mo), "period": "test (unseen)",
                             "model": name,
                             **metrics_at(y[mk], scores[name][mk], thresholds[name])})
     monthly_df = pd.DataFrame(monthly)
     monthly_df.to_csv(RESULTS_DIR / "monthly_metrics.csv", index=False)
 
-    print("\n=== PER-MONTH METRICS (months 0-5 were seen in training: optimistic) ===")
+    print("\n=== TEST-SPLIT METRICS PER MONTH (rows are unseen; split is random) ===")
     show(monthly_df, ["month", "period", "model", "fraud_cases", "pr_auc",
                       "roc_auc", "recall", "fpr", "recall_at_1pct_fpr"])
 
@@ -307,8 +311,9 @@ def main():
         "dnn": art["dnn_name"],
         "autoencoder": art["ae_name"],
         "ae_features": art["ae_features"],
-        "validation_months": VAL_MONTHS,
-        "test_months": TEST_MONTHS,
+        "split": "stratified random 70/15/15 (preprocess_balanced.py, seed 42)",
+        "val_rows": int(val.sum()),
+        "val_fraud_cases": int(y[val].sum()),
         "target_fpr": TARGET_FPR,
         "hybrid_ae_weight": scorer.weight,
         "hybrid_dnn_weight": 1.0 - scorer.weight,

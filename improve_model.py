@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 import numpy as np
@@ -18,10 +17,10 @@ print("=" * 60)
 print("DNN FRAUD DETECTION - VALIDATION THRESHOLD COMPARISON")
 print("=" * 60)
 
-# 1. Load validation data only
+# 1. Load validation data only (month is dropped: the baseline DNN was trained without it)
 print("\n1. Loading validation data...")
 
-X_val = pd.read_csv("processed/X_val.csv")
+X_val = pd.read_csv("processed/X_val.csv").drop(columns=["month"], errors="ignore")
 y_val = pd.read_csv("processed/y_val.csv").iloc[:, 0].to_numpy()
 
 print("Validation shape:", X_val.shape)

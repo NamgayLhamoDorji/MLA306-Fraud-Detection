@@ -1,19 +1,19 @@
 {
     "model": "DNN baseline",
     "validation_month": 6,
-    "validation_average_precision": 0.1591745447810035,
-    "validation_roc_auc": 0.8845000067855276,
-    "validation_precision": 0.05260136030386008,
-    "validation_recall": 0.8213793103448276,
-    "validation_f1": 0.09887099452100283,
+    "validation_average_precision": 0.14153341319041163,
+    "validation_roc_auc": 0.8792850694602317,
+    "validation_precision": 0.045471914405808174,
+    "validation_recall": 0.7914147521160823,
+    "validation_f1": 0.08600243093196676,
     "validation_confusion_matrix": [
         [
-            85267,
-            21451
+            120868,
+            27478
         ],
         [
-            259,
-            1191
+            345,
+            1309
         ]
     ]
 }

@@ -1,15 +1,13 @@
 {
     "n_trials": 25,
-    "best_validation_pr_auc": 0.16685042734355068,
+    "best_validation_pr_auc": 0.1511793531984998,
     "best_parameters": {
-        "n_layers": 2,
-        "units_1": 64,
-        "dropout_1": 0.23510453803507267,
-        "units_2": 256,
-        "dropout_2": 0.25779137891849074,
+        "n_layers": 1,
+        "units_1": 128,
+        "dropout_1": 0.13587827378149053,
         "activation": "leaky_relu",
-        "learning_rate": 0.0027444572291305375,
-        "batch_size": 256,
+        "learning_rate": 0.003482846706526885,
+        "batch_size": 512,
         "optimizer": "Adam"
     }
 }

@@ -2,6 +2,6 @@
     "model": "Autoencoder baseline",
     "validation_month": 6,
     "bottleneck": 16,
-    "pr_auc": 0.019658564261116486,
-    "roc_auc": 0.6024264594215758
+    "pr_auc": 0.01221580033690928,
+    "roc_auc": 0.5233199527116179
 }
